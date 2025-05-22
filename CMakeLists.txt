@@ -3,10 +3,12 @@ project(USBCanTools)
 
 add_executable(
   ifclient
+  src/frame.c
   src/ifclient.c
   src/log.c
   src/util.c
   include/defs.h
+  include/frame.h
   include/ifshare.h
   include/log.h
   include/util.h)
@@ -16,10 +18,12 @@ target_include_directories(ifclient PUBLIC include)
 
 add_executable(
   ifserver
+  src/frame.c
   src/ifserver.c
   src/log.c
   src/util.c
   include/defs.h
+  include/frame.h
   include/ifshare.h
   include/log.h
   include/util.h)

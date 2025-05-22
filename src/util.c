@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <defs.h>
+#include <string.h>
 
 #define STRBUILD_BSIZ 16
 

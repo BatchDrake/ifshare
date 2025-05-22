@@ -2,6 +2,7 @@
 #define _DEFS_H
 
 #include <stdbool.h>
+#include <stdlib.h>
 #include "log.h"
 
 #ifndef MIN
