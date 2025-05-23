@@ -107,7 +107,7 @@
   don't want to leak full paths into the binary.
 */
 #ifndef __REL_FILE__
-#  define __REL_FILE__ ""
+#  define __REL_FILE__ __FILE__
 #endif /* __REL_FILE__ */
 
 #define TRYCATCH(expr, action)           \

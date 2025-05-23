@@ -12,7 +12,7 @@
 #include <util.h>
 #include <pthread.h>
 
-static unsigned g_log_level      = LogInfo;
+static unsigned g_log_level      = LogDebug;
 bool            g_log_line_start = true;
 FILE           *g_logfp          = NULL;
 bool            g_use_colors     = false;

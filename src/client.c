@@ -14,6 +14,7 @@ client_thread(void *userdata)
 {
   client_t *self = (client_t *) userdata;
   frame_t *frame = NULL;
+  char ack;
   struct pollfd fds[2];
   bool running = true;
 
@@ -36,6 +37,7 @@ client_thread(void *userdata)
       poll(fds, 2, 1000);
 
       if (fds[0].revents & POLLIN) {
+        read(self->cancelfd[0], &ack, 1);
         Info("[%16s] Cancel request\n", self->name);
         running = false;
       } else if (fds[1].revents & POLLOUT) {
@@ -99,6 +101,8 @@ INSTANCER(client, int sfd, char *name)
   new->thread_running = true;
   new->thread_started = true;
   
+  Info("[%16s] New client\n", new->name);
+
   return new;
 
 fail:
@@ -131,6 +135,8 @@ COLLECTOR(client)
     DISPOSE(fqueue, self->queue);
   
   close(self->sfd);
+
+  free(self);
 }
 
 METHOD(client, bool, push_frame, frame_t *frame)

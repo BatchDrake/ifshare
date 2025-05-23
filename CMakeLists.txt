@@ -21,6 +21,7 @@ add_executable(
   src/frame.c
   src/ifserver.c
   src/log.c
+  src/server.c
   src/util.c
   include/client.h
   include/defs.h

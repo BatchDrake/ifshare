@@ -106,11 +106,12 @@ METHOD(fqueue, frame_t *, pop_frame)
     last = NULL;
   
   first = first->next;
-
+  if (first != NULL)
+    first->prev = NULL;
+  
   self->first       = first;
   self->last        = last;
-  self->first->prev = NULL;
-
+  
   /* Cache this one here */
   current->prev = NULL;
   current->next = self->free;
