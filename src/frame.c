@@ -30,6 +30,8 @@ INSTANCER(frame, size_t size)
   new->refcnt = 0;
   frame_inc_ref(new);
 
+  gettimeofday(&new->timestamp, NULL);
+  
   return new;
 
 fail:

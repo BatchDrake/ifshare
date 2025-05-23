@@ -4,8 +4,10 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <defs.h>
+#include <sys/time.h>
 
 struct frame {
+  struct timeval  timestamp;
   pthread_mutex_t mutex;
   uint32_t        refcnt;
   struct frame   *next;

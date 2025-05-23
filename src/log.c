@@ -10,11 +10,13 @@
 #include <time.h>
 #include <sys/time.h>
 #include <util.h>
+#include <pthread.h>
 
 static unsigned g_log_level      = LogInfo;
 bool            g_log_line_start = true;
 FILE           *g_logfp          = NULL;
-bool            g_use_colors         = false;
+bool            g_use_colors     = false;
+pthread_mutex_t g_log_mutex      = PTHREAD_MUTEX_INITIALIZER;
 
 static const char *g_months[] = {
   "jan", "feb", "mar",
@@ -44,6 +46,8 @@ logprintf(
   char *msg = NULL;
 
   va_start(ap, fmt);
+
+  pthread_mutex_lock(&g_log_mutex);
 
   if (level < g_log_level)
     goto done;
@@ -97,6 +101,8 @@ done:
     
     free(msg);
   }
+
+  pthread_mutex_unlock(&g_log_mutex);
 
   va_end(ap);
 }

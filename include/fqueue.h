@@ -8,7 +8,6 @@
 struct fqueue_frame {
   struct fqueue_frame *prev;
   struct fqueue_frame *next;
-  struct timeval tv;
 
   frame_t *frame;
 };

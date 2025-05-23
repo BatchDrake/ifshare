@@ -17,6 +17,25 @@ fail:
 
 COLLECTOR(fqueue)
 {
+  struct fqueue_frame *this;
+  struct fqueue_frame *next;
+
+  this = self->free;
+  while (this != NULL) {
+    next = this->next;
+    free(this);
+    this = next;
+  }
+
+  this = self->first;
+  while (this != NULL) {
+    if (this->frame != NULL)
+      frame_dec_ref(this->frame);
+    next = this->next;
+    free(this);
+    this = next;
+  }
+
   pthread_cond_destroy(&self->cond);
   pthread_mutex_destroy(&self->mutex);
   free(self);
@@ -38,18 +57,15 @@ METHOD(fqueue, bool, push_frame, frame_t *frame)
     ALLOCATE(current, struct fqueue_frame);
   }
 
-  gettimeofday(&current->tv, NULL);
-
   current->next = NULL;
+  current->prev = self->last;
 
-  if (self->last == NULL) {
-    self->first   = self->last = current;
-    current->prev = NULL;
-  } else {
-    current->prev    = self->last;
+  if (self->last == NULL)
+    self->first = current;
+  else
     self->last->next = current;
-    self->last       = current;
-  }
+  
+  self->last = current;
 
   /* Transfer frame. No incref */
   current->frame = frame;
@@ -80,17 +96,16 @@ METHOD(fqueue, frame_t *, pop_frame)
     pthread_cond_wait(&self->cond, &self->mutex);
   
   /* No inc/ref, ownership is transferred directly to the caller */
-  first = self->first;
-  last  = self->last;
-
+  first   = self->first;
+  last    = self->last;
   current = first;
 
-  frame = current->frame;
+  frame   = current->frame;
 
   if (first == last)
-    first = last = NULL;
-  else
-    first = first->next;
+    last = NULL;
+  
+  first = first->next;
 
   self->first       = first;
   self->last        = last;
@@ -101,4 +116,6 @@ METHOD(fqueue, frame_t *, pop_frame)
   current->next = self->free;
 
   pthread_mutex_unlock(&self->mutex);
+
+  return frame;
 }
