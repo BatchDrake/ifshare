@@ -1,13 +1,32 @@
+/*
+  server.c: Server implementation
+  Copyright (C) 2025 Gonzalo José Carracedo Carballal
+  
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Lesser General Public License as
+  published by the Free Software Foundation, version 3.
+
+  This program is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public
+  License along with this program.  If not, see
+  <http://www.gnu.org/licenses/>
+
+*/
+
+#include <ifshare.h>
+
 #include <linux/if_packet.h>
-//#include <linux/if.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <net/if.h>
+#include <linux/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netinet/ether.h>
-
 
 #include <server.h>
 
@@ -219,28 +238,32 @@ METHOD(server, static int, open_raw_socket, const char *eth)
   struct ifreq if_idx;
   struct ifreq if_mac;
   struct ifreq ifopts;
+  struct packet_mreq mr;
+  struct sockaddr_ll sll;
+
+        
   int sockopt = -1;
   char if_name[IFNAMSIZ];
 
   int fd;
   bool ok = false;
 
-  if ((fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_IP))) == -1) {
+  if ((fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) == -1) {
     Err("Failed to create raw socket: %s\n", strerror(errno));
     goto done;
   }
 
   /* Retrieve NIC properties */
   memset(if_name, 0, IFNAMSIZ);
-	strncpy(if_name, eth, strlen(eth));
+  strncpy(if_name, eth, strlen(eth));
 
-	memset(&if_idx, 0, sizeof(struct ifreq));
-	strncpy(if_idx.ifr_name, if_name, IFNAMSIZ - 1);
-	TRYC(ioctl(fd, SIOCGIFINDEX, &if_idx));
+  memset(&if_idx, 0, sizeof(struct ifreq));
+  strncpy(if_idx.ifr_name, if_name, IFNAMSIZ - 1);
+  TRYC(ioctl(fd, SIOCGIFINDEX, &if_idx));
   
-	memset(&if_mac, 0, sizeof(struct ifreq));
-	strncpy(if_mac.ifr_name, if_name, IFNAMSIZ - 1);
-	TRYC(ioctl(fd, SIOCGIFHWADDR, &if_mac));
+  memset(&if_mac, 0, sizeof(struct ifreq));
+  strncpy(if_mac.ifr_name, if_name, IFNAMSIZ - 1);
+  TRYC(ioctl(fd, SIOCGIFHWADDR, &if_mac));
 
   Info(
     "%s opened (hwaddr %02x:%02x:%02x:%02x:%02x:%02x)\n",
@@ -252,19 +275,24 @@ METHOD(server, static int, open_raw_socket, const char *eth)
     (uint8_t) if_mac.ifr_hwaddr.sa_data[4],
     (uint8_t) if_mac.ifr_hwaddr.sa_data[5]);
 
-	/* receive options, set to promisc mode */
-	strncpy(ifopts.ifr_name, if_name, IFNAMSIZ - 1);
-	ioctl(fd, SIOCGIFFLAGS, &ifopts);
-
-	ifopts.ifr_flags |= IFF_PROMISC;
-	ioctl(fd, SIOCSIFFLAGS, &ifopts);
-
-	/* catch if socket is closed */
-	TRYC(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof(sockopt)));
-
-	/* bind the socket */
-	TRYC(setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, if_name, IFNAMSIZ - 1));
-	
+  memset(&sll, 0, sizeof(sll));
+  sll.sll_family = AF_PACKET;
+  sll.sll_ifindex = if_idx.ifr_ifindex;
+  sll.sll_protocol = htons(ETH_P_ALL);
+  
+  if (bind(fd, (struct sockaddr *)&sll, sizeof(sll)) < 0) {
+    Err("bind(link layer): %s\n", strerror(errno));
+    goto done;
+  }
+  
+  memset(&mr, 0, sizeof(mr));
+  mr.mr_ifindex = if_idx.ifr_ifindex;
+  mr.mr_type = PACKET_MR_PROMISC;
+  if (setsockopt(fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mr, sizeof(mr)) < 0) {
+    Err("setsockopt(PACKET_ADD_MEMBERSHIP): %s\n", strerror(errno));
+    goto done;
+  }
+        
   ok = true;
 
 done:
@@ -293,12 +321,13 @@ METHOD(server, bool, loop, const char *eth)
   for (;;) {
     TRYC(poll(&fd, 1, -1));
 
-    MAKE(frame, frame, IFSHARE_MAX_MTU + sizeof(uint32_t));
-    ret = recv(
-      rawfd,
-      frame->data + sizeof(uint32_t),
-      IFSHARE_MAX_MTU,
-      0);
+    MAKE(frame, frame, IFSHARE_MAX_MTU + sizeof(struct ifshare_pdu));
+
+    struct ifshare_pdu *pdu = (struct ifshare_pdu *) frame->data;
+
+    pdu->is_magic = IFSHARE_MAGIC;
+
+    ret = recv(rawfd, pdu->is_data, IFSHARE_MAX_MTU, 0);
 
     if (ret == -1) {
       Err("recv RAW failed: %s\n", strerror(errno));
@@ -308,9 +337,11 @@ METHOD(server, bool, loop, const char *eth)
       break;
     }
 
-    *(uint32_t *) frame->data = ret;
+    pdu->is_size = ret;
 
-    TRY(frame_resize(frame, ret + sizeof(uint32_t)));
+    //Debug("FRAME[0x%x, %d] (%d)\n", pdu->is_magic, pdu->is_size, sizeof(struct ifshare_pdu) + ret);
+
+    TRY(frame_resize(frame, sizeof(struct ifshare_pdu) + ret));
     TRY(server_broadcast(self, frame));
 
     frame_dec_ref(frame);

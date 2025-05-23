@@ -1,3 +1,22 @@
+/*
+  log.c: Logging subsystem
+  Copyright (C) 2025 Gonzalo José Carracedo Carballal
+  
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Lesser General Public License as
+  published by the Free Software Foundation, version 3.
+
+  This program is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public
+  License along with this program.  If not, see
+  <http://www.gnu.org/licenses/>
+
+*/
+
 #define _POSIX_SOURCE
 
 #include <log.h>
@@ -11,6 +30,8 @@
 #include <sys/time.h>
 #include <util.h>
 #include <pthread.h>
+#include <stdint.h>
+#include <ctype.h>
 
 static unsigned g_log_level      = LogDebug;
 bool            g_log_line_start = true;
@@ -105,4 +126,40 @@ done:
   pthread_mutex_unlock(&g_log_mutex);
 
   va_end(ap);
+}
+
+void
+log_hexdump(enum loglevel level, const void *data, size_t size)
+{
+  const uint8_t *bytes = (const uint8_t *) data;
+  int i, j;
+
+  for (i = 0; i < size; ++i) {
+    if ((i & 0xf) == 0)
+      Log(level, "%08x  ", i);
+
+    Log(level, "%s%02x ", (i & 0xf) == 8 ? " " : "", bytes[i]);
+
+    if ((i & 0xf) == 0xf) {
+      Log(level, " | ");
+
+      for (j = i - 15; j <= i; ++j)
+        Log(level, "%c", isprint(bytes[j]) ? bytes[j] : '.');
+
+      Log(level, "\n");
+    }
+  }
+
+  if ((i & 0xf) != 0) {
+    for (j = i; j < ((size + 0xf) >> 4) << 4; ++j)
+      Log(level, "   %s", (j & 0xf) == 8 ? " " : "");
+    Log(level, " | ");
+
+    for (j = i & ~0xf; j < size; ++j)
+      Log(level, "%c", isprint (bytes[j]) ? bytes[j] : '.');
+
+    Log(level, "\n");
+  }
+
+  Log(level, "%08x  \n", i);
 }
